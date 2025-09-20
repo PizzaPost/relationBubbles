@@ -352,6 +352,11 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE:
                 tk_queue.put("cc")
+            mods = pygame.key.get_mods()
+            if mods & pygame.KMOD_CTRL and event.key == pygame.K_s:
+                print(bubbles)
+            elif mods and pygame.KMOD_CTRL and event.key == pygame.K_o:
+                bubbles = list(input("Send your code here: "))
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = event.pos
             world_mx = (mx - map_offset_x) / zoom_level
