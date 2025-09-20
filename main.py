@@ -28,6 +28,10 @@ height = 0
 tk_queue = queue.Queue()
 bubble_queue = queue.Queue()
 
+rmin = 12
+rmax = 100
+rdef = 24
+
 
 def tkinter_thread():
     global tk_queue, bubble_queue
@@ -146,15 +150,15 @@ def create_create_window():
                                    size=(127, 28))
     color_palette = customtkinter.CTkLabel(frame, text="", image=image, width=127, height=28)
     color_palette.bind("<Button-1>", lambda event: get_color_at_mouse(event, color_picker))
-    zoom_slider = customtkinter.CTkSlider(frame, from_=-5, to=10, number_of_steps=30)
-    zoom_slider.set(0)
+    radius_slider = customtkinter.CTkSlider(frame, from_=rmin, to=rmax, number_of_steps=30)
+    radius_slider.set(rdef)
     submit_btn = customtkinter.CTkButton(frame, text="submit",
                                          command=lambda: close_create_menu(True, entry, world_x, world_y, color_picker,
-                                                                           zoom_slider))
+                                                                           radius_slider))
     entry.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=8, pady=(6, 8))
     color_picker.grid(row=2, column=0, sticky="e", padx=4, pady=6)
     color_palette.grid(row=2, column=1, sticky="w", pady=6)
-    zoom_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
+    radius_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
     submit_btn.grid(row=4, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
     close_btn.grid(row=0, column=1, sticky="ne", padx=6, pady=6)
     tk.protocol("WM_DELETE_WINDOW", close_create_menu)
@@ -167,7 +171,7 @@ def create_bubble(data):
     y = data[2]
     if not text.replace("\n", "") == "":
         color = data[3]
-        zoom = data[4]
+        radius = data[4]
         text = text[:-1]
         texts = text.split("\n")
         bubbles.append({
@@ -175,24 +179,17 @@ def create_bubble(data):
             "x": x,
             "y": y,
             "color": color,
-            "zoom": zoom,
-            "rect": None,
+            "radius": radius,
             "connections": [],
             "rendered_lines": []
         })
-        bubbles[-1]["rect"] = calc_bubble_rect(bubbles[-1], "rect")[0]
 
 
 tk_thread = threading.Thread(target=tkinter_thread, daemon=True)
 tk_thread.start()
 
-
-def calc_bubble_rect(bubble, *args):
-    to_return = []
-    zoom_factor = 1.0 + (bubble["zoom"] * 0.1)
-    font_size = int(24 * zoom_factor)
-    bubble_font = pygame.font.SysFont(None, font_size)
-    max_text_width_world = 350 * (1.0 + (bubble["zoom"] * 0.15))
+def wrap_lines(bubble):
+    max_text_width_world = bubble["radius"]
     original_lines = bubble.get("name", [])
     wrapped_lines = []
 
@@ -208,34 +205,17 @@ def calc_bubble_rect(bubble, *args):
                 current_line = word + " "
         wrapped_lines.append(current_line.strip())
     bubble["rendered_lines"] = [line for line in wrapped_lines if line]
-    lines = bubble["rendered_lines"] or [" "]
-    line_height = int(font_size * 0.8)
-    max_text_width = max(bubble_font.size(line)[0] for line in lines)
-    total_text_height = len(lines) * line_height
-    padding_x = font_size * 1.2
-    padding_y = font_size * 0.8
-    bubble_width = max_text_width + padding_x
-    bubble_height = total_text_height + padding_y
-    side_length = max(bubble_width, bubble_height)
-    rect = pygame.Rect(bubble["x"] - side_length / 2, bubble["y"] - side_length / 2, side_length, side_length)
-    if "maxw" in args:
-        to_return.append(side_length)
-    if "h" in args:
-        to_return.append(side_length)
-    if "rect" in args:
-        to_return.append(rect)
-    return to_return
 
 
-def close_edit_menu(save, bubble, entry, color_picker, zoom_slider):
+def close_edit_menu(save, bubble, entry, color_picker, radius_slider):
     global tk
     if save:
         text = entry.get("1.0", "end")[:-1]
         texts = text.split("\n")
         bubble["name"] = texts
         bubble["color"] = hex_to_rgb(color_picker.cget("fg_color"))
-        bubble["zoom"] = zoom_slider.get()
-        bubble["rect"] = calc_bubble_rect(bubble, "rect")[0]
+        bubble["radius"] = radius_slider.get()
+        wrap_lines(bubble)
     tk.destroy()
     tk = None
 
@@ -278,15 +258,15 @@ def create_edit_menu(bubble):
                                    size=(127, 28))
     color_palette = customtkinter.CTkLabel(frame, text="", image=image, width=127, height=28)
     color_palette.bind("<Button-1>", lambda event: get_color_at_mouse(event, color_picker))
-    zoom_slider = customtkinter.CTkSlider(frame, from_=-5, to=10, number_of_steps=30)
-    zoom_slider.set(bubble["zoom"])
+    radius_slider = customtkinter.CTkSlider(frame, from_=rmin, to=rmax, number_of_steps=30)
+    radius_slider.set(bubble["radius"])
     submit_btn = customtkinter.CTkButton(frame, text="submit",
                                          command=lambda: close_edit_menu(True, bubble, entry, color_picker,
-                                                                         zoom_slider))
+                                                                         radius_slider))
     entry.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=8, pady=(6, 8))
     color_picker.grid(row=2, column=0, sticky="e", padx=4, pady=6)
     color_palette.grid(row=2, column=1, sticky="w", pady=6)
-    zoom_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
+    radius_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
     submit_btn.grid(row=4, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
     close_btn.grid(row=0, column=1, sticky="ne", padx=6, pady=6)
     tk.protocol("WM_DELETE_WINDOW", close_edit_menu)
@@ -314,6 +294,7 @@ def handle_zoom(event):
 pg = pygame.display.set_mode((screen_width // 1.5, screen_height // 1.5 * 1.2), pygame.RESIZABLE)
 pygame.display.set_caption("Bubble Net")
 bubbles = []
+bubble_font = pygame.font.SysFont(None, 24)
 welcomeFont = pygame.font.SysFont(None, 24)
 welcomeText = welcomeFont.render("Nothing here yet. Start to spread your creativity!", True, (255, 255, 255))
 halfWelcomeTextWidth = welcomeText.get_width() // 2
@@ -327,7 +308,7 @@ map_offset_y = 0
 dragging_map = False
 last_mouse_pos = (0, 0)
 easing_factor = 0.1
-min_distance_multiplier = 0.9
+min_distance_multiplier = 1.1
 click_start = None
 moved = False
 connecting_bubble = None
@@ -366,8 +347,8 @@ while running:
                 moved = False
                 clicked_on_bubble = False
                 for bubble in bubbles:
-                    rect = calc_bubble_rect(bubble, "rect")[0]
-                    if rect.collidepoint(world_mx, world_my):
+                    distance = math.sqrt((bubble["x"] - world_mx)**2 + (bubble["y"] - world_my)**2)
+                    if distance < bubble["radius"]:
                         dragging = bubble
                         offset_x = bubble["x"] - world_mx
                         offset_y = bubble["y"] - world_my
@@ -379,8 +360,8 @@ while running:
             elif event.button == 3:
                 on_rect = False
                 for bubble in bubbles:
-                    rect = calc_bubble_rect(bubble, "rect")[0]
-                    if rect.collidepoint(world_mx, world_my):
+                    distance = math.sqrt((bubble["x"] - world_mx)**2 + (bubble["y"] - world_my)**2)
+                    if distance < bubble["radius"]:
                         tk_queue.put(("ce", bubble))
                         on_rect = True
                         break
@@ -396,8 +377,8 @@ while running:
                 world_my = (my - map_offset_y) / zoom_level
                 clicked_bubble = None
                 for bubble in bubbles:
-                    rect = calc_bubble_rect(bubble, "rect")[0]
-                    if rect.collidepoint(world_mx, world_my):
+                    distance = math.sqrt((bubble["x"] - world_mx)**2 + (bubble["y"] - world_my)**2)
+                    if distance < bubble["radius"]:
                         clicked_bubble = bubble
                         break
                 if connecting_bubble is None:
@@ -415,7 +396,6 @@ while running:
                 world_my = (my - map_offset_y) / zoom_level
                 dragging["x"] = world_mx + offset_x
                 dragging["y"] = world_my + offset_y
-                dragging["rect"] = calc_bubble_rect(dragging, "rect")[0]
             elif dragging_map:
                 last_mx, last_my = last_mouse_pos
                 dx = mx - last_mx
@@ -432,16 +412,15 @@ while running:
         if event.type == pygame.MOUSEWHEEL:
             handle_zoom(event)
     if connecting_bubble:
-        rect = calc_bubble_rect(connecting_bubble, "rect")[0]
-        start_center_world = rect.center
-        start_center_screen = (start_center_world[0] * zoom_level + map_offset_x,
-                               start_center_world[1] * zoom_level + map_offset_y)
+        radius = connecting_bubble["radius"]
+        start_center_screen = (connecting_bubble["x"] * zoom_level + map_offset_x,
+                               connecting_bubble["y"] * zoom_level + map_offset_y)
         end_pos = pygame.mouse.get_pos()
         dx = end_pos[0] - start_center_screen[0]
         dy = end_pos[1] - start_center_screen[1]
         if dx != 0 or dy != 0:
-            start_w_half = rect.width * zoom_level / 2
-            start_h_half = rect.height * zoom_level / 2
+            start_w_half = radius * zoom_level / 2
+            start_h_half = radius * zoom_level / 2
             t_x = start_w_half / abs(dx) if dx != 0 else float("inf")
             t_y = start_h_half / abs(dy) if dy != 0 else float("inf")
             t = min(t_x, t_y)
@@ -451,28 +430,24 @@ while running:
     if len(bubbles) > 0:
         for bubble in bubbles:
             for connected_bubble in bubble["connections"]:
-                b1_rect = calc_bubble_rect(bubble, "rect")[0]
-                b2_rect = calc_bubble_rect(connected_bubble, "rect")[0]
-                p1_center_world = b1_rect.center
-                p2_center_world = b2_rect.center
+                b1r = bubble["radius"]
+                b2r = connected_bubble["radius"]
+                p1_center_world = (bubble["x"], bubble["y"])
+                p2_center_world = (connected_bubble["x"], connected_bubble["y"])
                 dx = p2_center_world[0] - p1_center_world[0]
                 dy = p2_center_world[1] - p1_center_world[1]
                 if dx == 0 and dy == 0:
                     continue
-                t1x = (b1_rect.width / 2) / abs(dx) if dx != 0 else float("inf")
-                t1y = (b1_rect.height / 2) / abs(dy) if dy != 0 else float("inf")
-                t1 = min(t1x, t1y)
-                t2x = (b2_rect.width / 2) / abs(dx) if dx != 0 else float("inf")
-                t2y = (b2_rect.height / 2) / abs(dy) if dy != 0 else float("inf")
-                t2 = min(t2x, t2y)
-                if t1 + t2 < 1.0:
-                    start_point = (p1_center_world[0] + t1 * dx, p1_center_world[1] + t1 * dy)
-                    end_point = (p2_center_world[0] - t2 * dx, p2_center_world[1] - t2 * dy)
-                    start_screen = (start_point[0] * zoom_level + map_offset_x,
+                length = math.hypot(dx, dy)
+                t1 = b2r / length
+                t2 = b1r / length
+                start_point = (p1_center_world[0] + t2 * dx, p1_center_world[1] + t2 * dy)
+                end_point = (p2_center_world[0] - t1 * dx, p2_center_world[1] - t1 * dy)
+                start_screen = (start_point[0] * zoom_level + map_offset_x,
                                     start_point[1] * zoom_level + map_offset_y)
-                    end_screen = (end_point[0] * zoom_level + map_offset_x,
+                end_screen = (end_point[0] * zoom_level + map_offset_x,
                                   end_point[1] * zoom_level + map_offset_y)
-                    pygame.draw.aaline(pg, (100, 100, 100), start_screen, end_screen, 2)
+                pygame.draw.aaline(pg, (100, 100, 100), start_screen, end_screen, 2)
         for i in range(len(bubbles)):
             for j in range(i + 1, len(bubbles)):
                 bubble1 = bubbles[i]
@@ -482,37 +457,35 @@ while running:
                 dx = bubble2["x"] - bubble1["x"]
                 dy = bubble2["y"] - bubble1["y"]
                 distance = math.hypot(dx, dy)
-                bubble1_bbox_width = bubble1["rect"].width
-                bubble2_bbox_width = bubble2["rect"].width
-                min_distance = (bubble1_bbox_width / 2 + bubble2_bbox_width / 2) * min_distance_multiplier
+                bubble1_bbox_radius = bubble1["radius"]
+                bubble2_radius = bubble2["radius"]
+                min_distance = (bubble1_bbox_radius + bubble2_radius) * min_distance_multiplier
                 if 0 < distance < min_distance:
+                    overlap = min_distance - distance
                     nx = dx / distance
                     ny = dy / distance
-                    overlap = min_distance - distance
-                    push_strength = math.sqrt(overlap) * easing_factor
+                    push_strength = overlap / 2 * easing_factor
                     bubble1["x"] -= nx * push_strength
                     bubble1["y"] -= ny * push_strength
                     bubble2["x"] += nx * push_strength
                     bubble2["y"] += ny * push_strength
-                    bubble1["rect"] = calc_bubble_rect(bubble1, "rect")[0]
-                    bubble2["rect"] = calc_bubble_rect(bubble2, "rect")[0]
         for bubble in bubbles:
             if not bubble.get("rendered_lines"):
-                calc_bubble_rect(bubble)
+                wrap_lines(bubble)
                 if not bubble.get("rendered_lines"):
                     continue
-            zoom_factor = 1.0 + (bubble["zoom"] * 0.1)
-            font_size_unscaled = int(24 * zoom_factor)
+            radius = bubble["radius"]
+            font_size_unscaled = int(24 * radius / rdef)
             font_size_scaled = int(font_size_unscaled * zoom_level)
             if font_size_scaled < 1:
                 continue
             bubble_font = pygame.font.SysFont(None, font_size_scaled)
             line_height_scaled = int(font_size_scaled * 0.8)
-            bubble_rect_world = bubble["rect"]
-            bubble_width_screen = bubble_rect_world.width * zoom_level
-            bubble_height_screen = bubble_rect_world.height * zoom_level
-            bubble_x_screen = bubble_rect_world.x * zoom_level + map_offset_x
-            bubble_y_screen = bubble_rect_world.y * zoom_level + map_offset_y
+            bubble_radius = bubble["radius"]
+            bubble_width_screen = bubble_radius * zoom_level * 2
+            bubble_height_screen = bubble_radius * zoom_level * 2
+            bubble_x_screen = (bubble["x"] - bubble_radius) * zoom_level + map_offset_x
+            bubble_y_screen = (bubble["y"] - bubble_radius) * zoom_level + map_offset_y
             if bubble_width_screen < 1 or bubble_height_screen < 1 or \
                     bubble_x_screen > width or bubble_y_screen > height or \
                     bubble_x_screen + bubble_width_screen < 0 or \
