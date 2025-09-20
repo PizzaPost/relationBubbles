@@ -180,6 +180,7 @@ def create_bubble(data):
             "y": y,
             "color": color,
             "radius": radius,
+            "fm": 1.0,
             "connections": [],
             "rendered_lines": []
         })
@@ -448,6 +449,12 @@ while running:
                 end_screen = (end_point[0] * zoom_level + map_offset_x,
                                   end_point[1] * zoom_level + map_offset_y)
                 pygame.draw.aaline(pg, (100, 100, 100), start_screen, end_screen, 2)
+                
+                force = 0.001
+                bubble["x"] += force * dx
+                bubble["y"] += force * dy
+                connected_bubble["x"] -= force * dx
+                connected_bubble["y"] -= force * dy
         for i in range(len(bubbles)):
             for j in range(i + 1, len(bubbles)):
                 bubble1 = bubbles[i]
@@ -475,7 +482,7 @@ while running:
                 if not bubble.get("rendered_lines"):
                     continue
             radius = bubble["radius"]
-            font_size_unscaled = int(24 * radius / rdef)
+            font_size_unscaled = int(24 * radius / rdef * bubble["fm"])
             font_size_scaled = int(font_size_unscaled * zoom_level)
             if font_size_scaled < 1:
                 continue
@@ -503,12 +510,20 @@ while running:
             total_text_height_screen = len(bubble["rendered_lines"]) * line_height_scaled
             bubble_center_y_screen = bubble["y"] * zoom_level + map_offset_y
             text_block_start_y_screen = bubble_center_y_screen - (total_text_height_screen / 2)
+            maxLineWidth = 0
             for index, text in enumerate(bubble["rendered_lines"]):
                 rendered = bubble_font.render(text, True, text_color)
                 text_rect = rendered.get_rect()
+                maxLineWidth = max(maxLineWidth, text_rect.width)
                 text_rect.centerx = bubble["x"] * zoom_level + map_offset_x
                 text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
                 pg.blit(rendered, text_rect)
+            maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
+            minDiameter = bubble["radius"] * zoom_level
+            if max(maxLineWidth, line_height * len(bubble["rendered_lines"])) > maxDiameter:
+                bubble["fm"] *= 0.99
+            elif max(maxLineWidth, line_height * len(bubble["rendered_lines"])) < minDiameter:
+                bubble["fm"] *= 1.01
     elif tk_queue.empty() and tk is None:
         pg.blit(welcomeText, (width // 2 - halfWelcomeTextWidth, height // 2 - halfWelcomeTextHeight))
     zoom_text = welcomeFont.render(f"Zoom: {zoom_level:.2f}x", True, (200, 200, 200))
