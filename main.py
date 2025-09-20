@@ -11,6 +11,13 @@ from PIL import Image
 
 import color_picker
 
+try:
+    bubble_img_original = pygame.image.load("bubble.png")
+except pygame.error:
+    print("Warning: 'bubble.png' not found. Using a fallback shape.")
+    bubble_img_original = pygame.Surface((100, 100), pygame.SRCALPHA)
+    pygame.draw.rect(bubble_img_original, (255, 255, 255), (0, 0, 100, 100), border_radius=35)
+
 pygame.init()
 running = True
 tk = None
@@ -73,6 +80,12 @@ def rgb_to_hex(rgb):
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip("#")
     return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def get_contrasting_bubble_color(text_color):
+    r, g, b = text_color
+    brightness = (r * 299 + g * 587 + b * 114) / 1000
+    return (40, 40, 40) if brightness > 128 else (240, 240, 240)
 
 
 def get_color_at_mouse(event, color_picker):
@@ -164,7 +177,8 @@ def create_bubble(data):
             "color": color,
             "zoom": zoom,
             "rect": None,
-            "connections": []
+            "connections": [],
+            "rendered_lines": []
         })
         bubbles[-1]["rect"] = calc_bubble_rect(bubbles[-1], "rect")[0]
 
@@ -175,17 +189,39 @@ tk_thread.start()
 
 def calc_bubble_rect(bubble, *args):
     to_return = []
-    lines = bubble["name"]
     zoom_factor = 1.0 + (bubble["zoom"] * 0.1)
     font_size = int(24 * zoom_factor)
     bubble_font = pygame.font.SysFont(None, font_size)
-    maxw = max(bubble_font.size(line)[0] for line in lines) + 10
-    h = len(lines) * int(font_size * 0.8)
-    rect = pygame.Rect(bubble["x"] - maxw // 2, bubble["y"], maxw, h)
+    max_text_width_world = 350 * (1.0 + (bubble["zoom"] * 0.15))
+    original_lines = bubble.get("name", [])
+    wrapped_lines = []
+
+    for line in original_lines:
+        words = line.split(" ")
+        current_line = ""
+        for word in words:
+            test_line = current_line + word + " "
+            if bubble_font.size(test_line)[0] < max_text_width_world:
+                current_line = test_line
+            else:
+                wrapped_lines.append(current_line.strip())
+                current_line = word + " "
+        wrapped_lines.append(current_line.strip())
+    bubble["rendered_lines"] = [line for line in wrapped_lines if line]
+    lines = bubble["rendered_lines"] or [" "]
+    line_height = int(font_size * 0.8)
+    max_text_width = max(bubble_font.size(line)[0] for line in lines)
+    total_text_height = len(lines) * line_height
+    padding_x = font_size * 1.2
+    padding_y = font_size * 0.8
+    bubble_width = max_text_width + padding_x
+    bubble_height = total_text_height + padding_y
+    side_length = max(bubble_width, bubble_height)
+    rect = pygame.Rect(bubble["x"] - side_length / 2, bubble["y"] - side_length / 2, side_length, side_length)
     if "maxw" in args:
-        to_return.append(maxw)
+        to_return.append(side_length)
     if "h" in args:
-        to_return.append(h)
+        to_return.append(side_length)
     if "rect" in args:
         to_return.append(rect)
     return to_return
@@ -247,14 +283,12 @@ def create_edit_menu(bubble):
     submit_btn = customtkinter.CTkButton(frame, text="submit",
                                          command=lambda: close_edit_menu(True, bubble, entry, color_picker,
                                                                          zoom_slider))
-
     entry.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=8, pady=(6, 8))
     color_picker.grid(row=2, column=0, sticky="e", padx=4, pady=6)
     color_palette.grid(row=2, column=1, sticky="w", pady=6)
     zoom_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
     submit_btn.grid(row=4, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
     close_btn.grid(row=0, column=1, sticky="ne", padx=6, pady=6)
-
     tk.protocol("WM_DELETE_WINDOW", close_edit_menu)
     tk.mainloop()
 
@@ -284,7 +318,6 @@ welcomeFont = pygame.font.SysFont(None, 24)
 welcomeText = welcomeFont.render("Nothing here yet. Start to spread your creativity!", True, (255, 255, 255))
 halfWelcomeTextWidth = welcomeText.get_width() // 2
 halfWelcomeTextHeight = welcomeText.get_height() // 2
-bubble_font = pygame.font.SysFont(None, 24)
 line_height = 20
 dragging = None
 offset_x = 0
@@ -359,7 +392,7 @@ while running:
                 clicked_bubble = None
                 for bubble in bubbles:
                     rect = calc_bubble_rect(bubble, "rect")[0]
-                    if bubble["rect"].collidepoint(mx, my):
+                    if rect.collidepoint(world_mx, world_my):
                         clicked_bubble = bubble
                         break
                 if connecting_bubble is None:
@@ -444,9 +477,9 @@ while running:
                 dx = bubble2["x"] - bubble1["x"]
                 dy = bubble2["y"] - bubble1["y"]
                 distance = math.hypot(dx, dy)
-                bubble1_size = bubble1["rect"].width
-                bubble2_size = bubble2["rect"].width
-                min_distance = (bubble1_size / 2 + bubble2_size / 2) * min_distance_multiplier
+                bubble1_bbox_width = bubble1["rect"].width
+                bubble2_bbox_width = bubble2["rect"].width
+                min_distance = (bubble1_bbox_width / 2 + bubble2_bbox_width / 2) * min_distance_multiplier
                 if 0 < distance < min_distance:
                     nx = dx / distance
                     ny = dy / distance
@@ -459,17 +492,46 @@ while running:
                     bubble1["rect"] = calc_bubble_rect(bubble1, "rect")[0]
                     bubble2["rect"] = calc_bubble_rect(bubble2, "rect")[0]
         for bubble in bubbles:
+            if not bubble.get("rendered_lines"):
+                calc_bubble_rect(bubble)
+                if not bubble.get("rendered_lines"):
+                    continue
             zoom_factor = 1.0 + (bubble["zoom"] * 0.1)
-            font_size = int(24 * zoom_factor * zoom_level)
-            bubble_font = pygame.font.SysFont(None, font_size)
-            line_height = int(font_size * 0.8)
-            for index, text in enumerate(bubble["name"]):
-                rendered = bubble_font.render(text, True, bubble["color"])
+            font_size_unscaled = int(24 * zoom_factor)
+            font_size_scaled = int(font_size_unscaled * zoom_level)
+            if font_size_scaled < 1:
+                continue
+            bubble_font = pygame.font.SysFont(None, font_size_scaled)
+            line_height_scaled = int(font_size_scaled * 0.8)
+            bubble_rect_world = bubble["rect"]
+            bubble_width_screen = bubble_rect_world.width * zoom_level
+            bubble_height_screen = bubble_rect_world.height * zoom_level
+            bubble_x_screen = bubble_rect_world.x * zoom_level + map_offset_x
+            bubble_y_screen = bubble_rect_world.y * zoom_level + map_offset_y
+            if bubble_width_screen < 1 or bubble_height_screen < 1 or \
+                    bubble_x_screen > width or bubble_y_screen > height or \
+                    bubble_x_screen + bubble_width_screen < 0 or \
+                    bubble_y_screen + bubble_height_screen < 0:
+                continue
+            scaled_bubble = pygame.transform.scale(bubble_img_original,
+                                                   (int(bubble_width_screen), int(bubble_height_screen)))
+            tinted_bubble = scaled_bubble.copy()
+            tint_surface = pygame.Surface(scaled_bubble.get_size(), pygame.SRCALPHA)
+            bubble_bg_color = get_contrasting_bubble_color(bubble["color"])
+            tint_surface.fill((*bubble_bg_color, 220))
+            tinted_bubble.blit(tint_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            pg.blit(tinted_bubble, (bubble_x_screen, bubble_y_screen))
+            text_color = bubble["color"]
+            total_text_height_screen = len(bubble["rendered_lines"]) * line_height_scaled
+            bubble_center_y_screen = bubble["y"] * zoom_level + map_offset_y
+            text_block_start_y_screen = bubble_center_y_screen - (total_text_height_screen / 2)
+            for index, text in enumerate(bubble["rendered_lines"]):
+                rendered = bubble_font.render(text, True, text_color)
                 text_rect = rendered.get_rect()
                 text_rect.centerx = bubble["x"] * zoom_level + map_offset_x
-                text_rect.top = bubble["y"] * zoom_level + index * line_height + map_offset_y
+                text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
                 pg.blit(rendered, text_rect)
-    elif tk_queue.empty() and tk == None:
+    elif tk_queue.empty() and tk is None:
         pg.blit(welcomeText, (width // 2 - halfWelcomeTextWidth, height // 2 - halfWelcomeTextHeight))
     zoom_text = welcomeFont.render(f"Zoom: {zoom_level:.2f}x", True, (200, 200, 200))
     pg.blit(zoom_text, (10, 10))
