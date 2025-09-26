@@ -104,10 +104,10 @@ def get_color_at_mouse(event, color_picker):
     color_picker.configure(fg_color=hex_color, hover_color=hover_hex)
 
 
-def close_create_menu(save, entry=None, x=width // 2, y=height // 2, color_picker=None, zoom_slider=None):
+def close_create_menu(save, entry=None, x=width // 2, y=height // 2, color_picker=None, radius_slider=None, alignment_options=None):
     global tk
     if save:
-        bubble_data = (entry.get("1.0", "end"), x, y, hex_to_rgb(color_picker.cget("fg_color")), zoom_slider.get())
+        bubble_data = (entry.get("1.0", "end"), x, y, hex_to_rgb(color_picker.cget("fg_color")), radius_slider.get(), alignment_options.get())
         bubble_queue.put(bubble_data)
     tk.destroy()
     tk = None
@@ -152,14 +152,17 @@ def create_create_window():
     color_palette.bind("<Button-1>", lambda event: get_color_at_mouse(event, color_picker))
     radius_slider = customtkinter.CTkSlider(frame, from_=rmin, to=rmax, number_of_steps=30)
     radius_slider.set(rdef)
+    alignment_options = customtkinter.CTkOptionMenu(frame, values=["center","left","right"])
+    alignment_options.set("center")
     submit_btn = customtkinter.CTkButton(frame, text="submit",
                                          command=lambda: close_create_menu(True, entry, world_x, world_y, color_picker,
-                                                                           radius_slider))
+                                                                           radius_slider, alignment_options))
     entry.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=8, pady=(6, 8))
     color_picker.grid(row=2, column=0, sticky="e", padx=4, pady=6)
     color_palette.grid(row=2, column=1, sticky="w", pady=6)
     radius_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
-    submit_btn.grid(row=4, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
+    alignment_options.grid(row=4, column=0, sticky="ew", padx=8, pady=6)
+    submit_btn.grid(row=5, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
     close_btn.grid(row=0, column=1, sticky="ne", padx=6, pady=6)
     tk.protocol("WM_DELETE_WINDOW", close_create_menu)
     tk.mainloop()
@@ -172,6 +175,7 @@ def create_bubble(data):
     if not text.replace("\n", "") == "":
         color = data[3]
         radius = data[4]
+        alignment=data[5]
         text = text[:-1]
         texts = text.split("\n")
         bubbles.append({
@@ -182,7 +186,8 @@ def create_bubble(data):
             "radius": radius,
             "fm": 1.0,
             "connections": [],
-            "rendered_lines": []
+            "rendered_lines": [],
+            "text_alignment": alignment
         })
 
 
@@ -193,22 +198,20 @@ def wrap_lines(bubble):
     max_text_width_world = bubble["radius"]
     original_lines = bubble.get("name", [])
     wrapped_lines = []
-
     for line in original_lines:
-        words = line.split(" ")
-        current_line = ""
-        for word in words:
-            test_line = current_line + word + " "
-            if bubble_font.size(test_line)[0] < max_text_width_world:
-                current_line = test_line
-            else:
-                wrapped_lines.append(current_line.strip())
-                current_line = word + " "
-        wrapped_lines.append(current_line.strip())
+        split_next=False
+        for index, letter in enumerate(line):
+            if index>40:
+                split_next=True
+            if split_next:
+                if letter==" ":
+                    line = line[:index] + "\n" + line[index:]
+                    split_next=False
+        wrapped_lines.append(line)
     bubble["rendered_lines"] = [line for line in wrapped_lines if line]
 
 
-def close_edit_menu(save, bubble, entry, color_picker, radius_slider):
+def close_edit_menu(save, bubble, entry, color_picker, radius_slider, alignment_options):
     global tk
     if save:
         text = entry.get("1.0", "end")[:-1]
@@ -216,6 +219,7 @@ def close_edit_menu(save, bubble, entry, color_picker, radius_slider):
         bubble["name"] = texts
         bubble["color"] = hex_to_rgb(color_picker.cget("fg_color"))
         bubble["radius"] = radius_slider.get()
+        bubble["text_alignment"] = alignment_options.get()
         wrap_lines(bubble)
     tk.destroy()
     tk = None
@@ -261,14 +265,17 @@ def create_edit_menu(bubble):
     color_palette.bind("<Button-1>", lambda event: get_color_at_mouse(event, color_picker))
     radius_slider = customtkinter.CTkSlider(frame, from_=rmin, to=rmax, number_of_steps=30)
     radius_slider.set(bubble["radius"])
+    alignment_options = customtkinter.CTkOptionMenu(frame, values=["center", "left", "right"])
+    alignment_options.set(bubble["text_alignment"])
     submit_btn = customtkinter.CTkButton(frame, text="submit",
                                          command=lambda: close_edit_menu(True, bubble, entry, color_picker,
-                                                                         radius_slider))
+                                                                         radius_slider, alignment_options))
     entry.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=8, pady=(6, 8))
     color_picker.grid(row=2, column=0, sticky="e", padx=4, pady=6)
     color_palette.grid(row=2, column=1, sticky="w", pady=6)
     radius_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
-    submit_btn.grid(row=4, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
+    alignment_options.grid(row=4, column=0, sticky="ew", padx=8, pady=6)
+    submit_btn.grid(row=5, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
     close_btn.grid(row=0, column=1, sticky="ne", padx=6, pady=6)
     tk.protocol("WM_DELETE_WINDOW", close_edit_menu)
     tk.mainloop()
@@ -508,11 +515,24 @@ while running:
             bubble_center_y_screen = bubble["y"] * zoom_level + map_offset_y
             text_block_start_y_screen = bubble_center_y_screen - (total_text_height_screen / 2)
             maxLineWidth = 0
+            if bubble.get("text_alignment") == "left":
+                bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
+                text_x_pos = bubble_center_x_screen - ((bubble_width_screen / 2) + 10)/2
+            elif bubble.get("text_alignment") == "right":
+                bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
+                text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10)/2
+            else:
+                text_x_pos = bubble["x"] * zoom_level + map_offset_x
             for index, text in enumerate(bubble["rendered_lines"]):
-                rendered = bubble_font.render(text, True, text_color)
+                text_to_render = text if text.strip() else "‎ "
+                rendered = bubble_font.render(text_to_render, True, text_color)
                 text_rect = rendered.get_rect()
-                maxLineWidth = max(maxLineWidth, text_rect.width)
-                text_rect.centerx = bubble["x"] * zoom_level + map_offset_x
+                if bubble.get("text_alignment") == "left":
+                    text_rect.left = text_x_pos
+                elif bubble.get("text_alignment") == "right":
+                    text_rect.right = text_x_pos
+                else:
+                    text_rect.centerx = text_x_pos
                 text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
                 pg.blit(rendered, text_rect)
             maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
