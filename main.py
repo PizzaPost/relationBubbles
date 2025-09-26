@@ -449,7 +449,6 @@ while running:
                 end_screen = (end_point[0] * zoom_level + map_offset_x,
                                   end_point[1] * zoom_level + map_offset_y)
                 pygame.draw.aaline(pg, (100, 100, 100), start_screen, end_screen, 2)
-                
                 force = 0.001
                 bubble["x"] += force * dx
                 bubble["y"] += force * dy
@@ -482,10 +481,8 @@ while running:
                 if not bubble.get("rendered_lines"):
                     continue
             radius = bubble["radius"]
-            font_size_unscaled = int(24 * radius / rdef * bubble["fm"])
-            font_size_scaled = int(font_size_unscaled * zoom_level)
-            if font_size_scaled < 1:
-                continue
+            font_size_unscaled = max(1, int(24 * radius / rdef * bubble["fm"]))
+            font_size_scaled = max(1, int(font_size_unscaled * zoom_level))
             bubble_font = pygame.font.SysFont(None, font_size_scaled)
             line_height_scaled = int(font_size_scaled * 0.8)
             bubble_radius = bubble["radius"]
