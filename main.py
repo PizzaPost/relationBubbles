@@ -10,6 +10,7 @@ import pygame
 from PIL import Image
 
 import color_picker
+import nav_bar
 
 try:
     bubble_img_original = pygame.image.load("bubble.png")
@@ -104,10 +105,12 @@ def get_color_at_mouse(event, color_picker):
     color_picker.configure(fg_color=hex_color, hover_color=hover_hex)
 
 
-def close_create_menu(save, entry=None, x=width // 2, y=height // 2, color_picker=None, radius_slider=None, alignment_options=None):
+def close_create_menu(save, entry=None, x=width // 2, y=height // 2, color_picker=None, radius_slider=None,
+                      alignment_options=None):
     global tk
     if save:
-        bubble_data = (entry.get("1.0", "end"), x, y, hex_to_rgb(color_picker.cget("fg_color")), radius_slider.get(), alignment_options.get())
+        bubble_data = (entry.get("1.0", "end"), x, y, hex_to_rgb(color_picker.cget("fg_color")), radius_slider.get(),
+                       alignment_options.get())
         bubble_queue.put(bubble_data)
     tk.destroy()
     tk = None
@@ -123,7 +126,7 @@ def create_create_window():
     tk = customtkinter.CTk()
     customtkinter.set_default_color_theme("green")
     tk.title("add new bubble")
-    tk.geometry(f"410x300+{screen_width // 2 - 164}+{screen_height // 2 - 150}")
+    tk.geometry(f"410x350+{screen_width // 2 - 164}+{screen_height // 2 - 150}")
     tk.resizable(False, False)
     tk.attributes("-alpha", 0.85)
     tk.overrideredirect(True)
@@ -152,8 +155,16 @@ def create_create_window():
     color_palette.bind("<Button-1>", lambda event: get_color_at_mouse(event, color_picker))
     radius_slider = customtkinter.CTkSlider(frame, from_=rmin, to=rmax, number_of_steps=30)
     radius_slider.set(rdef)
-    alignment_options = customtkinter.CTkOptionMenu(frame, values=["center","left","right"])
-    alignment_options.set("center")
+    alignment_options = nav_bar.create_animated_pill_navigation(frame, labels=["left", "center", "right"],
+                                                                initial_index=1,
+                                                                grid={
+                                                                    'row': 4,
+                                                                    'column': 0,
+                                                                    'columnspan': 2,
+                                                                    'sticky': "ew",
+                                                                    'padx': 8,
+                                                                    'pady': 6
+                                                                })
     submit_btn = customtkinter.CTkButton(frame, text="submit",
                                          command=lambda: close_create_menu(True, entry, world_x, world_y, color_picker,
                                                                            radius_slider, alignment_options))
@@ -161,7 +172,6 @@ def create_create_window():
     color_picker.grid(row=2, column=0, sticky="e", padx=4, pady=6)
     color_palette.grid(row=2, column=1, sticky="w", pady=6)
     radius_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
-    alignment_options.grid(row=4, column=0, sticky="ew", padx=8, pady=6)
     submit_btn.grid(row=5, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
     close_btn.grid(row=0, column=1, sticky="ne", padx=6, pady=6)
     tk.protocol("WM_DELETE_WINDOW", close_create_menu)
@@ -175,7 +185,7 @@ def create_bubble(data):
     if not text.replace("\n", "") == "":
         color = data[3]
         radius = data[4]
-        alignment=data[5]
+        alignment = data[5]
         text = text[:-1]
         texts = text.split("\n")
         bubbles.append({
@@ -194,19 +204,20 @@ def create_bubble(data):
 tk_thread = threading.Thread(target=tkinter_thread, daemon=True)
 tk_thread.start()
 
+
 def wrap_lines(bubble):
     max_text_width_world = bubble["radius"]
     original_lines = bubble.get("name", [])
     wrapped_lines = []
     for line in original_lines:
-        split_next=False
+        split_next = False
         for index, letter in enumerate(line):
-            if index>40:
-                split_next=True
+            if index > 40:
+                split_next = True
             if split_next:
-                if letter==" ":
+                if letter == " ":
                     line = line[:index] + "\n" + line[index:]
-                    split_next=False
+                    split_next = False
         wrapped_lines.append(line)
     bubble["rendered_lines"] = [line for line in wrapped_lines if line]
 
@@ -232,7 +243,7 @@ def create_edit_menu(bubble):
     tk = customtkinter.CTk()
     customtkinter.set_default_color_theme("green")
     tk.title("edit bubble")
-    tk.geometry(f"410x300+{screen_width // 2 - 164}+{screen_height // 2 - 150}")
+    tk.geometry(f"410x350+{screen_width // 2 - 164}+{screen_height // 2 - 150}")
     tk.resizable(False, False)
     tk.attributes("-alpha", 0.85)
     tk.overrideredirect(True)
@@ -265,8 +276,18 @@ def create_edit_menu(bubble):
     color_palette.bind("<Button-1>", lambda event: get_color_at_mouse(event, color_picker))
     radius_slider = customtkinter.CTkSlider(frame, from_=rmin, to=rmax, number_of_steps=30)
     radius_slider.set(bubble["radius"])
-    alignment_options = customtkinter.CTkOptionMenu(frame, values=["center", "left", "right"])
-    alignment_options.set(bubble["text_alignment"])
+    for index, option in enumerate(["left", "center", "right"]):
+        if option==bubble["text_alignment"]:
+            alignment_options = nav_bar.create_animated_pill_navigation(frame, labels=["left", "center", "right"],
+                                                                        initial_index=index,
+                                                                        grid={
+                                                                            'row': 4,
+                                                                            'column': 0,
+                                                                            'columnspan': 2,
+                                                                            'sticky': "ew",
+                                                                            'padx': 8,
+                                                                            'pady': 6
+                                                                        })
     submit_btn = customtkinter.CTkButton(frame, text="submit",
                                          command=lambda: close_edit_menu(True, bubble, entry, color_picker,
                                                                          radius_slider, alignment_options))
@@ -274,7 +295,6 @@ def create_edit_menu(bubble):
     color_picker.grid(row=2, column=0, sticky="e", padx=4, pady=6)
     color_palette.grid(row=2, column=1, sticky="w", pady=6)
     radius_slider.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=6)
-    alignment_options.grid(row=4, column=0, sticky="ew", padx=8, pady=6)
     submit_btn.grid(row=5, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
     close_btn.grid(row=0, column=1, sticky="ne", padx=6, pady=6)
     tk.protocol("WM_DELETE_WINDOW", close_edit_menu)
@@ -355,7 +375,7 @@ while running:
                 moved = False
                 clicked_on_bubble = False
                 for bubble in bubbles:
-                    distance = math.sqrt((bubble["x"] - world_mx)**2 + (bubble["y"] - world_my)**2)
+                    distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
                     if distance < bubble["radius"]:
                         dragging = bubble
                         offset_x = bubble["x"] - world_mx
@@ -368,7 +388,7 @@ while running:
             elif event.button == 3:
                 on_rect = False
                 for bubble in bubbles:
-                    distance = math.sqrt((bubble["x"] - world_mx)**2 + (bubble["y"] - world_my)**2)
+                    distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
                     if distance < bubble["radius"]:
                         tk_queue.put(("ce", bubble))
                         on_rect = True
@@ -385,7 +405,7 @@ while running:
                 world_my = (my - map_offset_y) / zoom_level
                 clicked_bubble = None
                 for bubble in bubbles:
-                    distance = math.sqrt((bubble["x"] - world_mx)**2 + (bubble["y"] - world_my)**2)
+                    distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
                     if distance < bubble["radius"]:
                         clicked_bubble = bubble
                         break
@@ -452,9 +472,9 @@ while running:
                 start_point = (p1_center_world[0] + t2 * dx, p1_center_world[1] + t2 * dy)
                 end_point = (p2_center_world[0] - t1 * dx, p2_center_world[1] - t1 * dy)
                 start_screen = (start_point[0] * zoom_level + map_offset_x,
-                                    start_point[1] * zoom_level + map_offset_y)
+                                start_point[1] * zoom_level + map_offset_y)
                 end_screen = (end_point[0] * zoom_level + map_offset_x,
-                                  end_point[1] * zoom_level + map_offset_y)
+                              end_point[1] * zoom_level + map_offset_y)
                 pygame.draw.aaline(pg, (100, 100, 100), start_screen, end_screen, 2)
                 force = 0.001
                 bubble["x"] += force * dx
@@ -517,10 +537,10 @@ while running:
             maxLineWidth = 0
             if bubble.get("text_alignment") == "left":
                 bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
-                text_x_pos = bubble_center_x_screen - ((bubble_width_screen / 2) + 10)/2
+                text_x_pos = bubble_center_x_screen - ((bubble_width_screen / 2) + 10) / 2
             elif bubble.get("text_alignment") == "right":
                 bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
-                text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10)/2
+                text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10) / 2
             else:
                 text_x_pos = bubble["x"] * zoom_level + map_offset_x
             for index, text in enumerate(bubble["rendered_lines"]):
