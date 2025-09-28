@@ -358,7 +358,7 @@ while running:
     pg.fill((0, 0, 0))
     events=pygame.event.get()
     if batter_saving_cooldown>2000:
-        for event in pygame.event.get():
+        for event in events:
             if event.type == pygame.QUIT:
                 running = False
         if events:
@@ -375,7 +375,7 @@ while running:
             create_bubble(bubble_data)
         except queue.Empty:
             pass
-        for event in pygame.event.get():
+        for event in events:
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
