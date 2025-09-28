@@ -32,34 +32,22 @@ class AskColor(customtkinter.CTkToplevel):
             **button_kwargs
     ):
         super().__init__()
-
-        # Initialize configuration
         self._setup_config(width, title, bg_color)
-
-        # Initialize color variables
         self.default_rgb = [255, 255, 255]
         self.rgb_color = self.default_rgb.copy()
         self._color = None
-
-        # Initialize theme colors
         self._init_colors(button_color, button_hover_color, button_hover_color2,
                           fg_color, corner_radius, slider_border)
-
-        # Create UI
         self._create_widgets()
-
-        # Set initial color if provided
         if initial_color:
             self.set_initial_color(initial_color)
-
-        # Final setup
         self.after(150, lambda: self.button.focus())
         self.grab_set()
 
     def _setup_config(self, width: int, title: str, bg_color: Optional[str]) -> None:
         """Configure window properties."""
         self.title(title)
-        width = max(width, 200)  # Ensure minimum width
+        width = max(width, 200)
         height = width + 95
 
         self.image_dimension = self._apply_window_scaling(width - 100)
@@ -75,7 +63,6 @@ class AskColor(customtkinter.CTkToplevel):
         self.after(10)
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-        # Set background color
         bg = bg_color or self._apply_appearance_mode(
             customtkinter.ThemeManager.theme["CTkFrame"]["fg_color"]
         )
@@ -95,7 +82,7 @@ class AskColor(customtkinter.CTkToplevel):
         self.button_hover_color = button_hover_color
         self.button_hover_color2 = button_hover_color2
         self.corner_radius = corner_radius
-        self.slider_border = min(10, max(1, slider_border))  # Clamp between 1 and 10
+        self.slider_border = min(10, max(1, slider_border))
 
         self.bg_color = self.cget("bg")
         self.fg_color = fg_color or self._apply_appearance_mode(
@@ -104,21 +91,14 @@ class AskColor(customtkinter.CTkToplevel):
 
     def _create_widgets(self) -> None:
         """Create and arrange all UI widgets."""
-        # Main frame
         self.frame = customtkinter.CTkFrame(
             master=self,
             fg_color=self.fg_color,
             bg_color=self.bg_color
         )
         self.frame.grid(padx=20, pady=20, sticky="nswe")
-
-        # Color wheel canvas
         self._create_color_wheel()
-
-        # Brightness slider
         self._create_brightness_slider()
-
-        # OK button
         self._create_ok_button()
 
     def _create_color_wheel(self) -> None:
@@ -133,7 +113,6 @@ class AskColor(customtkinter.CTkToplevel):
         self.canvas.pack(pady=20)
         self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
 
-        # Load images
         self.img1 = Image.open(os.path.join(PATH, 'color_wheel.png')).resize(
             (self.image_dimension, self.image_dimension),
             Image.Resampling.LANCZOS
@@ -259,7 +238,7 @@ class AskColor(customtkinter.CTkToplevel):
     def get_target_color(self) -> None:
         """Get the color at the current target position."""
         try:
-            self.rgb_color = self.img1.getpixel((self.target_x, self.target_y))[:3]  # Get only RGB
+            self.rgb_color = self.img1.getpixel((self.target_x, self.target_y))[:3]
         except (AttributeError, IndexError):
             self.rgb_color = self.default_rgb.copy()
 
@@ -268,13 +247,11 @@ class AskColor(customtkinter.CTkToplevel):
         brightness = self.brightness_slider_value.get()
         self.get_target_color()
 
-        # Apply brightness adjustment
         adjusted_rgb = [
             int(c * (brightness / 255))
             for c in self.rgb_color
         ]
 
-        # Update button and slider colors
         hex_color = self.rgb_to_hex(adjusted_rgb)
         hover_rgb = self.get_hover_color(adjusted_rgb)
         hover_hex = self.rgb_to_hex(hover_rgb)
@@ -287,7 +264,6 @@ class AskColor(customtkinter.CTkToplevel):
             button_hover_color=hover2_hex
         )
 
-        # Adjust text color based on brightness
         text_color = "white" if brightness < 70 or hex_color == "#000000" else "black"
         self.button.configure(text_color=text_color)
 
@@ -311,11 +287,10 @@ class AskColor(customtkinter.CTkToplevel):
         except ValueError:
             return
 
-        # Search for the color in the image
         for i in range(self.image_dimension):
             for j in range(self.image_dimension):
                 pixel = self.img1.getpixel((i, j))
-                if pixel[:3] == (r, g, b):  # Compare only RGB
+                if pixel[:3] == (r, g, b):
                     self.canvas.delete("all")
                     self.canvas.create_image(self.image_dimension / 2, self.image_dimension / 2, image=self.wheel)
                     self.canvas.create_image(i, j, image=self.target)
@@ -325,7 +300,6 @@ class AskColor(customtkinter.CTkToplevel):
                     return
 
 
-# Helper functions for your usage example
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip('#')
