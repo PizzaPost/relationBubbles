@@ -488,7 +488,7 @@ def render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start
         maxLineWidth = max(maxLineWidth, text_rect.width)
         text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
         pg.blit(rendered, text_rect)
-        return maxLineWidth
+    return maxLineWidth
 
 
 def font_scaling(bubble, maxLineWidth):
