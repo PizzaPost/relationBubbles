@@ -491,12 +491,12 @@ def render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start
     return maxLineWidth
 
 
-def font_scaling(bubble, maxLineWidth):
+def font_scaling(bubble, maxLineWidth, totalLineHeight):
     maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
     minDiameter = bubble["radius"] * zoom_level
-    if max(maxLineWidth, line_height * len(bubble["rendered_lines"])) > maxDiameter:
+    if max(maxLineWidth, totalLineHeight) > maxDiameter:
         bubble["fm"] *= 0.99
-    elif max(maxLineWidth, line_height * len(bubble["rendered_lines"])) < minDiameter:
+    elif max(maxLineWidth, totalLineHeight) < minDiameter:
         bubble["fm"] *= 1.01
 
 
@@ -561,7 +561,7 @@ def draw_bubbles():
         text_block_start_y_screen, total_text_height = calc_bubble_text_layout(bubble, zoom_level, map_offset_y,
                                                                                line_height_scaled)
         maxLineWidth = render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen, line_height_scaled)
-        font_scaling(bubble, maxLineWidth)
+        font_scaling(bubble, maxLineWidth, total_text_height)
 
 
 pg = pygame.display.set_mode((screen_width // 1.5, screen_height // 1.5 * 1.2), pygame.RESIZABLE)
