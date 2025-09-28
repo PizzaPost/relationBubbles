@@ -388,6 +388,130 @@ def handle_mouse_motion():
     if click_start:
         if math.hypot(event.pos[0] - click_start[0], event.pos[1] - click_start[1]) > 5:
             moved = True
+
+def draw_connection_line_between_bubble_and_mouse(connecting_bubble):
+    radius = connecting_bubble["radius"]
+    start_center_screen = (connecting_bubble["x"] * zoom_level + map_offset_x,
+                           connecting_bubble["y"] * zoom_level + map_offset_y)
+    end_pos = pygame.mouse.get_pos()
+    dx = end_pos[0] - start_center_screen[0]
+    dy = end_pos[1] - start_center_screen[1]
+    if dx != 0 or dy != 0:
+        start_w_half = radius * zoom_level / 2
+        start_h_half = radius * zoom_level / 2
+        t_x = start_w_half / abs(dx) if dx != 0 else float("inf")
+        t_y = start_h_half / abs(dy) if dy != 0 else float("inf")
+        t = min(t_x, t_y)
+        if t < 1.0:
+            start_point = (start_center_screen[0] + t * dx, start_center_screen[1] + t * dy)
+            pygame.draw.aaline(pg, (200, 200, 200), start_point, end_pos, 2)
+
+def draw_bubbles():
+    for bubble in bubbles:
+        for connected_bubble in bubble["connections"]:
+            b1r = bubble["radius"]
+            b2r = connected_bubble["radius"]
+            p1_center_world = (bubble["x"], bubble["y"])
+            p2_center_world = (connected_bubble["x"], connected_bubble["y"])
+            dx = p2_center_world[0] - p1_center_world[0]
+            dy = p2_center_world[1] - p1_center_world[1]
+            if dx == 0 and dy == 0:
+                continue
+            length = math.hypot(dx, dy)
+            t1 = b2r / length
+            t2 = b1r / length
+            start_point = (p1_center_world[0] + t2 * dx, p1_center_world[1] + t2 * dy)
+            end_point = (p2_center_world[0] - t1 * dx, p2_center_world[1] - t1 * dy)
+            start_screen = (start_point[0] * zoom_level + map_offset_x,
+                            start_point[1] * zoom_level + map_offset_y)
+            end_screen = (end_point[0] * zoom_level + map_offset_x,
+                          end_point[1] * zoom_level + map_offset_y)
+            pygame.draw.aaline(pg, (100, 100, 100), start_screen, end_screen, 2)
+            force = 0.001
+            bubble["x"] += force * dx
+            bubble["y"] += force * dy
+            connected_bubble["x"] -= force * dx
+            connected_bubble["y"] -= force * dy
+    for i in range(len(bubbles)):
+        for j in range(i + 1, len(bubbles)):
+            bubble1 = bubbles[i]
+            bubble2 = bubbles[j]
+            if bubble1 is dragging or bubble2 is dragging:
+                continue
+            dx = bubble2["x"] - bubble1["x"]
+            dy = bubble2["y"] - bubble1["y"]
+            distance = math.hypot(dx, dy)
+            bubble1_bbox_radius = bubble1["radius"]
+            bubble2_radius = bubble2["radius"]
+            min_distance = (bubble1_bbox_radius + bubble2_radius) * min_distance_multiplier
+            if 0 < distance < min_distance:
+                overlap = min_distance - distance
+                nx = dx / distance
+                ny = dy / distance
+                push_strength = overlap / 2 * easing_factor
+                bubble1["x"] -= nx * push_strength
+                bubble1["y"] -= ny * push_strength
+                bubble2["x"] += nx * push_strength
+                bubble2["y"] += ny * push_strength
+    for bubble in bubbles:
+        if not bubble.get("rendered_lines"):
+            wrap_lines(bubble)
+            if not bubble.get("rendered_lines"):
+                continue
+        radius = bubble["radius"]
+        font_size_unscaled = max(1, int(24 * radius / rdef * bubble["fm"]))
+        font_size_scaled = max(1, int(font_size_unscaled * zoom_level))
+        bubble_font = pygame.font.SysFont(None, font_size_scaled)
+        line_height_scaled = int(font_size_scaled * 0.8)
+        bubble_radius = bubble["radius"]
+        bubble_width_screen = bubble_radius * zoom_level * 2
+        bubble_height_screen = bubble_radius * zoom_level * 2
+        bubble_x_screen = (bubble["x"] - bubble_radius) * zoom_level + map_offset_x
+        bubble_y_screen = (bubble["y"] - bubble_radius) * zoom_level + map_offset_y
+        if bubble_width_screen < 1 or bubble_height_screen < 1 or \
+                bubble_x_screen > width or bubble_y_screen > height or \
+                bubble_x_screen + bubble_width_screen < 0 or \
+                bubble_y_screen + bubble_height_screen < 0:
+            continue
+        scaled_bubble = pygame.transform.scale(bubble_img_original,
+                                               (int(bubble_width_screen), int(bubble_height_screen)))
+        tinted_bubble = scaled_bubble.copy()
+        tint_surface = pygame.Surface(scaled_bubble.get_size(), pygame.SRCALPHA)
+        bubble_bg_color = get_contrasting_bubble_color(bubble["color"])
+        tint_surface.fill((*bubble_bg_color, 220))
+        tinted_bubble.blit(tint_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        pg.blit(tinted_bubble, (bubble_x_screen, bubble_y_screen))
+        text_color = bubble["color"]
+        total_text_height_screen = len(bubble["rendered_lines"]) * line_height_scaled
+        bubble_center_y_screen = bubble["y"] * zoom_level + map_offset_y
+        text_block_start_y_screen = bubble_center_y_screen - (total_text_height_screen / 2)
+        maxLineWidth = 0
+        if bubble.get("text_alignment") == "left":
+            bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
+            text_x_pos = bubble_center_x_screen - ((bubble_width_screen / 2) + 10) / 2
+        elif bubble.get("text_alignment") == "right":
+            bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
+            text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10) / 2
+        else:
+            text_x_pos = bubble["x"] * zoom_level + map_offset_x
+        for index, text in enumerate(bubble["rendered_lines"]):
+            text_to_render = text if text.strip() else "‎ "
+            rendered = bubble_font.render(text_to_render, True, text_color)
+            text_rect = rendered.get_rect()
+            if bubble.get("text_alignment") == "left":
+                text_rect.left = text_x_pos
+            elif bubble.get("text_alignment") == "right":
+                text_rect.right = text_x_pos
+            else:
+                text_rect.centerx = text_x_pos
+            text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
+            pg.blit(rendered, text_rect)
+        maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
+        minDiameter = bubble["radius"] * zoom_level
+        if max(maxLineWidth, line_height * len(bubble["rendered_lines"])) > maxDiameter:
+            bubble["fm"] *= 0.99
+        elif max(maxLineWidth, line_height * len(bubble["rendered_lines"])) < minDiameter:
+            bubble["fm"] *= 1.01
 pg = pygame.display.set_mode((screen_width // 1.5, screen_height // 1.5 * 1.2), pygame.RESIZABLE)
 pygame.display.set_caption("Bubble Net")
 bubbles = []
@@ -479,127 +603,9 @@ while running:
             if event.type == pygame.MOUSEWHEEL:
                 handle_zoom(event)
         if connecting_bubble:
-            radius = connecting_bubble["radius"]
-            start_center_screen = (connecting_bubble["x"] * zoom_level + map_offset_x,
-                                   connecting_bubble["y"] * zoom_level + map_offset_y)
-            end_pos = pygame.mouse.get_pos()
-            dx = end_pos[0] - start_center_screen[0]
-            dy = end_pos[1] - start_center_screen[1]
-            if dx != 0 or dy != 0:
-                start_w_half = radius * zoom_level / 2
-                start_h_half = radius * zoom_level / 2
-                t_x = start_w_half / abs(dx) if dx != 0 else float("inf")
-                t_y = start_h_half / abs(dy) if dy != 0 else float("inf")
-                t = min(t_x, t_y)
-                if t < 1.0:
-                    start_point = (start_center_screen[0] + t * dx, start_center_screen[1] + t * dy)
-                    pygame.draw.aaline(pg, (200, 200, 200), start_point, end_pos, 2)
+            draw_connection_line_between_bubble_and_mouse(connecting_bubble)
         if len(bubbles) > 0:
-            for bubble in bubbles:
-                for connected_bubble in bubble["connections"]:
-                    b1r = bubble["radius"]
-                    b2r = connected_bubble["radius"]
-                    p1_center_world = (bubble["x"], bubble["y"])
-                    p2_center_world = (connected_bubble["x"], connected_bubble["y"])
-                    dx = p2_center_world[0] - p1_center_world[0]
-                    dy = p2_center_world[1] - p1_center_world[1]
-                    if dx == 0 and dy == 0:
-                        continue
-                    length = math.hypot(dx, dy)
-                    t1 = b2r / length
-                    t2 = b1r / length
-                    start_point = (p1_center_world[0] + t2 * dx, p1_center_world[1] + t2 * dy)
-                    end_point = (p2_center_world[0] - t1 * dx, p2_center_world[1] - t1 * dy)
-                    start_screen = (start_point[0] * zoom_level + map_offset_x,
-                                    start_point[1] * zoom_level + map_offset_y)
-                    end_screen = (end_point[0] * zoom_level + map_offset_x,
-                                  end_point[1] * zoom_level + map_offset_y)
-                    pygame.draw.aaline(pg, (100, 100, 100), start_screen, end_screen, 2)
-                    force = 0.001
-                    bubble["x"] += force * dx
-                    bubble["y"] += force * dy
-                    connected_bubble["x"] -= force * dx
-                    connected_bubble["y"] -= force * dy
-            for i in range(len(bubbles)):
-                for j in range(i + 1, len(bubbles)):
-                    bubble1 = bubbles[i]
-                    bubble2 = bubbles[j]
-                    if bubble1 is dragging or bubble2 is dragging:
-                        continue
-                    dx = bubble2["x"] - bubble1["x"]
-                    dy = bubble2["y"] - bubble1["y"]
-                    distance = math.hypot(dx, dy)
-                    bubble1_bbox_radius = bubble1["radius"]
-                    bubble2_radius = bubble2["radius"]
-                    min_distance = (bubble1_bbox_radius + bubble2_radius) * min_distance_multiplier
-                    if 0 < distance < min_distance:
-                        overlap = min_distance - distance
-                        nx = dx / distance
-                        ny = dy / distance
-                        push_strength = overlap / 2 * easing_factor
-                        bubble1["x"] -= nx * push_strength
-                        bubble1["y"] -= ny * push_strength
-                        bubble2["x"] += nx * push_strength
-                        bubble2["y"] += ny * push_strength
-            for bubble in bubbles:
-                if not bubble.get("rendered_lines"):
-                    wrap_lines(bubble)
-                    if not bubble.get("rendered_lines"):
-                        continue
-                radius = bubble["radius"]
-                font_size_unscaled = max(1, int(24 * radius / rdef * bubble["fm"]))
-                font_size_scaled = max(1, int(font_size_unscaled * zoom_level))
-                bubble_font = pygame.font.SysFont(None, font_size_scaled)
-                line_height_scaled = int(font_size_scaled * 0.8)
-                bubble_radius = bubble["radius"]
-                bubble_width_screen = bubble_radius * zoom_level * 2
-                bubble_height_screen = bubble_radius * zoom_level * 2
-                bubble_x_screen = (bubble["x"] - bubble_radius) * zoom_level + map_offset_x
-                bubble_y_screen = (bubble["y"] - bubble_radius) * zoom_level + map_offset_y
-                if bubble_width_screen < 1 or bubble_height_screen < 1 or \
-                        bubble_x_screen > width or bubble_y_screen > height or \
-                        bubble_x_screen + bubble_width_screen < 0 or \
-                        bubble_y_screen + bubble_height_screen < 0:
-                    continue
-                scaled_bubble = pygame.transform.scale(bubble_img_original,
-                                                       (int(bubble_width_screen), int(bubble_height_screen)))
-                tinted_bubble = scaled_bubble.copy()
-                tint_surface = pygame.Surface(scaled_bubble.get_size(), pygame.SRCALPHA)
-                bubble_bg_color = get_contrasting_bubble_color(bubble["color"])
-                tint_surface.fill((*bubble_bg_color, 220))
-                tinted_bubble.blit(tint_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-                pg.blit(tinted_bubble, (bubble_x_screen, bubble_y_screen))
-                text_color = bubble["color"]
-                total_text_height_screen = len(bubble["rendered_lines"]) * line_height_scaled
-                bubble_center_y_screen = bubble["y"] * zoom_level + map_offset_y
-                text_block_start_y_screen = bubble_center_y_screen - (total_text_height_screen / 2)
-                maxLineWidth = 0
-                if bubble.get("text_alignment") == "left":
-                    bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
-                    text_x_pos = bubble_center_x_screen - ((bubble_width_screen / 2) + 10) / 2
-                elif bubble.get("text_alignment") == "right":
-                    bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
-                    text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10) / 2
-                else:
-                    text_x_pos = bubble["x"] * zoom_level + map_offset_x
-                for index, text in enumerate(bubble["rendered_lines"]):
-                    text_to_render = text if text.strip() else "‎ "
-                    rendered = bubble_font.render(text_to_render, True, text_color)
-                    text_rect = rendered.get_rect()
-                    if bubble.get("text_alignment") == "left":
-                        text_rect.left = text_x_pos
-                    elif bubble.get("text_alignment") == "right":
-                        text_rect.right = text_x_pos
-                    else:
-                        text_rect.centerx = text_x_pos
-                    text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
-                    pg.blit(rendered, text_rect)
-                maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
-                minDiameter = bubble["radius"] * zoom_level
-                if max(maxLineWidth, line_height * len(bubble["rendered_lines"])) > maxDiameter:
-                    bubble["fm"] *= 0.99
-                elif max(maxLineWidth, line_height * len(bubble["rendered_lines"])) < minDiameter:
-                    bubble["fm"] *= 1.01
+            draw_bubbles()
         elif tk_queue.empty() and tk is None:
             pg.blit(welcomeText, (width // 2 - halfWelcomeTextWidth, height // 2 - halfWelcomeTextHeight))
         zoom_text = basicFont.render(f"Zoom: {zoom_level:.2f}x", True, (200, 200, 200))
