@@ -474,6 +474,7 @@ def render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start
         text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10) / 2
     else:
         text_x_pos = bubble["x"] * zoom_level + map_offset_x
+    maxLineWidth = 0
     for index, text in enumerate(bubble["rendered_lines"]):
         text_to_render = text if text.strip() else "‎ "
         rendered = bubble_font.render(text_to_render, True, text_color)
@@ -484,16 +485,18 @@ def render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start
             text_rect.right = text_x_pos
         else:
             text_rect.centerx = text_x_pos
+        maxLineWidth = max(maxLineWidth, text_rect.width)
         text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
         pg.blit(rendered, text_rect)
+        return maxLineWidth
 
 
-def font_scaling(bubble):
+def font_scaling(bubble, maxLineWidth):
     maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
     minDiameter = bubble["radius"] * zoom_level
-    if max(0, line_height * len(bubble["rendered_lines"])) > maxDiameter:
+    if max(maxLineWidth, line_height * len(bubble["rendered_lines"])) > maxDiameter:
         bubble["fm"] *= 0.99
-    elif max(0, line_height * len(bubble["rendered_lines"])) < minDiameter:
+    elif max(maxLineWidth, line_height * len(bubble["rendered_lines"])) < minDiameter:
         bubble["fm"] *= 1.01
 
 
@@ -557,8 +560,8 @@ def draw_bubbles():
         text_color = bubble["color"]
         text_block_start_y_screen, total_text_height = calc_bubble_text_layout(bubble, zoom_level, map_offset_y,
                                                                                line_height_scaled)
-        render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen, line_height_scaled)
-        font_scaling(bubble)
+        maxLineWidth = render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen, line_height_scaled)
+        font_scaling(bubble, maxLineWidth)
 
 
 pg = pygame.display.set_mode((screen_width // 1.5, screen_height // 1.5 * 1.2), pygame.RESIZABLE)
