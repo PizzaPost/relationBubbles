@@ -14,10 +14,10 @@ import nav_bar
 
 try:
     bubble_img_original = pygame.image.load("bubble.png")
-    batter_saving_icon=pygame.image.load("batter_saving_icon.png")
-    half_batter_saving_icon_width=batter_saving_icon.get_width()//2
-    half_batter_saving_icon_height=batter_saving_icon.get_height()//2
-    bubble_icon=pygame.image.load("bubble_icon.png")
+    batter_saving_icon = pygame.image.load("batter_saving_icon.png")
+    half_batter_saving_icon_width = batter_saving_icon.get_width() // 2
+    half_batter_saving_icon_height = batter_saving_icon.get_height() // 2
+    bubble_icon = pygame.image.load("bubble_icon.png")
 except pygame.error:
     print("Warning: 'bubble.png' not found. Using a fallback shape.")
     bubble_img_original = pygame.Surface((100, 100), pygame.SRCALPHA)
@@ -210,7 +210,6 @@ tk_thread.start()
 
 
 def wrap_lines(bubble):
-    max_text_width_world = bubble["radius"]
     original_lines = bubble.get("name", [])
     wrapped_lines = []
     for line in original_lines:
@@ -281,7 +280,7 @@ def create_edit_menu(bubble):
     radius_slider = customtkinter.CTkSlider(frame, from_=rmin, to=rmax, number_of_steps=30)
     radius_slider.set(bubble["radius"])
     for index, option in enumerate(["left", "center", "right"]):
-        if option==bubble["text_alignment"]:
+        if option == bubble["text_alignment"]:
             alignment_options = nav_bar.create_animated_pill_navigation(frame, labels=["left", "center", "right"],
                                                                         initial_index=index,
                                                                         grid={
@@ -321,15 +320,17 @@ def handle_zoom(event):
         map_offset_y += (world_my_after - world_my_before) * zoom_level
         return True
     return False
+
+
 def handle_mouse_button_one_down():
-    global click_start, moved, dragging, offset_x, offset_y, dragging_map, last_mouse_pos
+    global click_start, moved, dragging_bubble, offset_x, offset_y, dragging_map, last_mouse_pos
     click_start = event.pos
     moved = False
     clicked_on_bubble = False
     for bubble in bubbles:
         distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
         if distance < bubble["radius"]:
-            dragging = bubble
+            dragging_bubble = bubble
             offset_x = bubble["x"] - world_mx
             offset_y = bubble["y"] - world_my
             clicked_on_bubble = True
@@ -337,6 +338,7 @@ def handle_mouse_button_one_down():
     if not clicked_on_bubble:
         dragging_map = True
         last_mouse_pos = event.pos
+
 
 def handle_mouse_button_three_down():
     global world_mx, world_my
@@ -349,6 +351,8 @@ def handle_mouse_button_three_down():
             break
     if not on_rect:
         tk_queue.put("cc")
+
+
 def handle_mouse_button_one_up():
     global connecting_bubble
     mx, my = event.pos
@@ -369,15 +373,16 @@ def handle_mouse_button_one_up():
                 connecting_bubble["connections"].append(clicked_bubble)
         connecting_bubble = None
 
+
 def handle_mouse_motion():
-    global batter_saving_cooldown, dragging, map_offset_x, map_offset_y, dragging_map, last_mouse_pos, click_start, moved
+    global batter_saving_cooldown, dragging_bubble, map_offset_x, map_offset_y, dragging_map, last_mouse_pos, click_start, moved
     batter_saving_cooldown = 0
     mx, my = event.pos
-    if dragging:
+    if dragging_bubble:
         world_mx = (mx - map_offset_x) / zoom_level
         world_my = (my - map_offset_y) / zoom_level
-        dragging["x"] = world_mx + offset_x
-        dragging["y"] = world_my + offset_y
+        dragging_bubble["x"] = world_mx + offset_x
+        dragging_bubble["y"] = world_my + offset_y
     elif dragging_map:
         last_mx, last_my = last_mouse_pos
         dx = mx - last_mx
@@ -388,6 +393,7 @@ def handle_mouse_motion():
     if click_start:
         if math.hypot(event.pos[0] - click_start[0], event.pos[1] - click_start[1]) > 5:
             moved = True
+
 
 def draw_connection_line_between_bubble_and_mouse(connecting_bubble):
     radius = connecting_bubble["radius"]
@@ -406,7 +412,8 @@ def draw_connection_line_between_bubble_and_mouse(connecting_bubble):
             start_point = (start_center_screen[0] + t * dx, start_center_screen[1] + t * dy)
             pygame.draw.aaline(pg, (200, 200, 200), start_point, end_pos, 2)
 
-def draw_bubbles():
+
+def draw_connection_line_between_bubbles():
     for bubble in bubbles:
         for connected_bubble in bubble["connections"]:
             b1r = bubble["radius"]
@@ -432,11 +439,14 @@ def draw_bubbles():
             bubble["y"] += force * dy
             connected_bubble["x"] -= force * dx
             connected_bubble["y"] -= force * dy
+
+
+def handle_bubble_collisions():
     for i in range(len(bubbles)):
         for j in range(i + 1, len(bubbles)):
             bubble1 = bubbles[i]
             bubble2 = bubbles[j]
-            if bubble1 is dragging or bubble2 is dragging:
+            if bubble1 is dragging_bubble or bubble2 is dragging_bubble:
                 continue
             dx = bubble2["x"] - bubble1["x"]
             dy = bubble2["y"] - bubble1["y"]
@@ -453,65 +463,104 @@ def draw_bubbles():
                 bubble1["y"] -= ny * push_strength
                 bubble2["x"] += nx * push_strength
                 bubble2["y"] += ny * push_strength
+
+
+def render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen, line_height_scaled):
+    if bubble.get("text_alignment") == "left":
+        bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
+        text_x_pos = bubble_center_x_screen - ((bubble_width_screen / 2) + 10) / 2
+    elif bubble.get("text_alignment") == "right":
+        bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
+        text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10) / 2
+    else:
+        text_x_pos = bubble["x"] * zoom_level + map_offset_x
+    for index, text in enumerate(bubble["rendered_lines"]):
+        text_to_render = text if text.strip() else "‎ "
+        rendered = bubble_font.render(text_to_render, True, text_color)
+        text_rect = rendered.get_rect()
+        if bubble.get("text_alignment") == "left":
+            text_rect.left = text_x_pos
+        elif bubble.get("text_alignment") == "right":
+            text_rect.right = text_x_pos
+        else:
+            text_rect.centerx = text_x_pos
+        text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
+        pg.blit(rendered, text_rect)
+
+
+def font_scaling(bubble):
+    maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
+    minDiameter = bubble["radius"] * zoom_level
+    if max(0, line_height * len(bubble["rendered_lines"])) > maxDiameter:
+        bubble["fm"] *= 0.99
+    elif max(0, line_height * len(bubble["rendered_lines"])) < minDiameter:
+        bubble["fm"] *= 1.01
+
+
+def calc_font_and_line_height(bubble, rdef, zoom_level):
+    radius = bubble["radius"]
+    font_size_unscaled = max(1, int(24 * radius / rdef * bubble["fm"]))
+    font_size_scaled = max(1, int(font_size_unscaled * zoom_level))
+    bubble_font = pygame.font.SysFont(None, font_size_scaled)
+    line_height_scaled = int(font_size_scaled * 0.8)
+    return bubble_font, line_height_scaled
+
+
+def calc_bubble_screen_rect(bubble, zoom_level, map_offset_x, map_offset_y):
+    r = bubble["radius"]
+    w = r * zoom_level * 2
+    h = r * zoom_level * 2
+    x = (bubble["x"] - r) * zoom_level + map_offset_x
+    y = (bubble["y"] - r) * zoom_level + map_offset_y
+    return x, y, w, h
+
+
+def is_bubble_offscreen(x, y, w, h, screen_width, screen_height):
+    return w < 1 or h < 1 or \
+        x > screen_width or y > screen_height or \
+        x + w < 0 or y + h < 0
+
+
+def render_bubble_image(surface, bubble_img_original, x, y, w, h, bubble_color):
+    scaled_bubble = pygame.transform.scale(bubble_img_original, (int(w), int(h)))
+    tinted_bubble = scaled_bubble.copy()
+    tint_surface = pygame.Surface(scaled_bubble.get_size(), pygame.SRCALPHA)
+    bubble_bg_color = get_contrasting_bubble_color(bubble_color)
+    tint_surface.fill((*bubble_bg_color, 220))
+    tinted_bubble.blit(tint_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surface.blit(tinted_bubble, (x, y))
+
+
+def calc_bubble_text_layout(bubble, zoom_level, map_offset_y, line_height_scaled):
+    total_text_height = len(bubble["rendered_lines"]) * line_height_scaled
+    center_y = bubble["y"] * zoom_level + map_offset_y
+    text_block_start_y = center_y - (total_text_height / 2)
+    return text_block_start_y, total_text_height
+
+
+def draw_bubbles():
+    global bubble_font
+    draw_connection_line_between_bubbles()
+    handle_bubble_collisions()
     for bubble in bubbles:
         if not bubble.get("rendered_lines"):
             wrap_lines(bubble)
             if not bubble.get("rendered_lines"):
                 continue
-        radius = bubble["radius"]
-        font_size_unscaled = max(1, int(24 * radius / rdef * bubble["fm"]))
-        font_size_scaled = max(1, int(font_size_unscaled * zoom_level))
-        bubble_font = pygame.font.SysFont(None, font_size_scaled)
-        line_height_scaled = int(font_size_scaled * 0.8)
+        bubble_font, line_height_scaled = calc_font_and_line_height(bubble, rdef, zoom_level)
+        x, y, w, h = calc_bubble_screen_rect(bubble, zoom_level, map_offset_x, map_offset_y)
+        if is_bubble_offscreen(x, y, w, h, width, height):
+            continue
+        render_bubble_image(pg, bubble_img_original, x, y, w, h, bubble["color"])
         bubble_radius = bubble["radius"]
         bubble_width_screen = bubble_radius * zoom_level * 2
-        bubble_height_screen = bubble_radius * zoom_level * 2
-        bubble_x_screen = (bubble["x"] - bubble_radius) * zoom_level + map_offset_x
-        bubble_y_screen = (bubble["y"] - bubble_radius) * zoom_level + map_offset_y
-        if bubble_width_screen < 1 or bubble_height_screen < 1 or \
-                bubble_x_screen > width or bubble_y_screen > height or \
-                bubble_x_screen + bubble_width_screen < 0 or \
-                bubble_y_screen + bubble_height_screen < 0:
-            continue
-        scaled_bubble = pygame.transform.scale(bubble_img_original,
-                                               (int(bubble_width_screen), int(bubble_height_screen)))
-        tinted_bubble = scaled_bubble.copy()
-        tint_surface = pygame.Surface(scaled_bubble.get_size(), pygame.SRCALPHA)
-        bubble_bg_color = get_contrasting_bubble_color(bubble["color"])
-        tint_surface.fill((*bubble_bg_color, 220))
-        tinted_bubble.blit(tint_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        pg.blit(tinted_bubble, (bubble_x_screen, bubble_y_screen))
         text_color = bubble["color"]
-        total_text_height_screen = len(bubble["rendered_lines"]) * line_height_scaled
-        bubble_center_y_screen = bubble["y"] * zoom_level + map_offset_y
-        text_block_start_y_screen = bubble_center_y_screen - (total_text_height_screen / 2)
-        maxLineWidth = 0
-        if bubble.get("text_alignment") == "left":
-            bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
-            text_x_pos = bubble_center_x_screen - ((bubble_width_screen / 2) + 10) / 2
-        elif bubble.get("text_alignment") == "right":
-            bubble_center_x_screen = bubble["x"] * zoom_level + map_offset_x
-            text_x_pos = bubble_center_x_screen + ((bubble_width_screen / 2) - 10) / 2
-        else:
-            text_x_pos = bubble["x"] * zoom_level + map_offset_x
-        for index, text in enumerate(bubble["rendered_lines"]):
-            text_to_render = text if text.strip() else "‎ "
-            rendered = bubble_font.render(text_to_render, True, text_color)
-            text_rect = rendered.get_rect()
-            if bubble.get("text_alignment") == "left":
-                text_rect.left = text_x_pos
-            elif bubble.get("text_alignment") == "right":
-                text_rect.right = text_x_pos
-            else:
-                text_rect.centerx = text_x_pos
-            text_rect.top = text_block_start_y_screen + (index * line_height_scaled)
-            pg.blit(rendered, text_rect)
-        maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
-        minDiameter = bubble["radius"] * zoom_level
-        if max(maxLineWidth, line_height * len(bubble["rendered_lines"])) > maxDiameter:
-            bubble["fm"] *= 0.99
-        elif max(maxLineWidth, line_height * len(bubble["rendered_lines"])) < minDiameter:
-            bubble["fm"] *= 1.01
+        text_block_start_y_screen, total_text_height = calc_bubble_text_layout(bubble, zoom_level, map_offset_y,
+                                                                               line_height_scaled)
+        render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen, line_height_scaled)
+        font_scaling(bubble)
+
+
 pg = pygame.display.set_mode((screen_width // 1.5, screen_height // 1.5 * 1.2), pygame.RESIZABLE)
 pygame.display.set_caption("Bubble Net")
 bubbles = []
@@ -524,7 +573,7 @@ batterSavingText = basicFont.render("Interact to stop the battery saving mode.",
 halfbatterSavingTextWidth = batterSavingText.get_width() // 2
 halfbatterSavingTextHeight = batterSavingText.get_height() // 2
 line_height = 20
-dragging = None
+dragging_bubble = None
 offset_x = 0
 offset_y = 0
 map_offset_x = 0
@@ -541,18 +590,19 @@ min_zoom = 0.3
 max_zoom = 3
 zoom_speed = 0.1
 zoom = 0
-batter_saving_cooldown=0
+batter_saving_cooldown = 0
 clock = pygame.time.Clock()
 while running:
     pg.fill((0, 0, 0))
-    events=pygame.event.get()
-    if batter_saving_cooldown>2000:
+    events = pygame.event.get()
+    if batter_saving_cooldown > 2000:
         for event in events:
             if event.type == pygame.QUIT:
                 running = False
         if events:
-            batter_saving_cooldown=0
-        pg.blit(batter_saving_icon, (width//2-half_batter_saving_icon_width, height//2-half_batter_saving_icon_height-half_batter_saving_icon_height*2))
+            batter_saving_cooldown = 0
+        pg.blit(batter_saving_icon, (width // 2 - half_batter_saving_icon_width,
+                                     height // 2 - half_batter_saving_icon_height - half_batter_saving_icon_height * 2))
         pg.blit(batterSavingText, (width // 2 - halfbatterSavingTextWidth, height // 2 - halfbatterSavingTextHeight))
         pygame.display.set_icon(batter_saving_icon)
     else:
@@ -568,7 +618,7 @@ while running:
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                batter_saving_cooldown=0
+                batter_saving_cooldown = 0
                 if event.key == pygame.K_SPACE:
                     tk_queue.put("cc")
                 mods = pygame.key.get_mods()
@@ -586,8 +636,8 @@ while running:
                 elif event.button == 3:
                     handle_mouse_button_three_down()
             elif event.type == pygame.MOUSEBUTTONUP:
-                batter_saving_cooldown=0
-                dragging = None
+                batter_saving_cooldown = 0
+                dragging_bubble = None
                 click_start = None
                 dragging_map = False
                 if event.button == 1 and not moved:
@@ -595,10 +645,10 @@ while running:
             elif event.type == pygame.MOUSEMOTION:
                 handle_mouse_motion()
             elif event.type == pygame.MOUSEWHEEL:
-                batter_saving_cooldown=0
+                batter_saving_cooldown = 0
                 handle_zoom(event)
         if not events:
-            batter_saving_cooldown+=1
+            batter_saving_cooldown += 1
         for event in pygame.event.get(pump=False):
             if event.type == pygame.MOUSEWHEEL:
                 handle_zoom(event)
