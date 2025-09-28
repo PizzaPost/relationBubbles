@@ -1,16 +1,44 @@
-import math
-import queue
-import threading
-import time
+try:
+    import os
+    import math
+    import queue
+    import threading
+    import time
+    import tkinter
+    import sys
+    import urllib.request
+except ImportError as e:
+    print(f"Error: '{e.name}' not found. Please install it using 'pip install {e.name}'.")
+    exit()
 
-import customtkinter
-import mss
-import pyautogui
-import pygame
-from PIL import Image
+necessarry_files = ["batter_saving_icon.png", "bubble.png", "bubble_icon.png", "color_palette.png", "color_wheel.png",
+                    "target.png"]
+custom_modules=["color_picker", "nav_bar"]
+trying=True
+while trying:
+    try:
+        import customtkinter
+        import mss
+        import pyautogui
+        import pygame
+        from PIL import Image
 
-import color_picker
-import nav_bar
+        import color_picker
+        import nav_bar
+        trying=False
+    except ImportError as e:
+        if not e.name=="tkinter":
+            tkinter.messagebox.showinfo("Missing Module", f"Downloading '{e.name}'")
+        if not e.name in custom_modules:
+            os.system(f"pip install {e.name}")
+        else:
+            link=f"https://raw.githubusercontent.com/PizzaPost/relationBubbles/master/{e.name}.py"
+            urllib.request.urlretrieve(link, f"{e.name}.py")
+for file in necessarry_files:
+    if not os.path.exists(file):
+        tkinter.messagebox.showinfo("Missing File", f"Downloading '{file}'")
+        link=f"https://raw.githubusercontent.com/PizzaPost/relationBubbles/master/{file}"
+        urllib.request.urlretrieve(link, file)
 
 try:
     bubble_img_original = pygame.image.load("bubble.png")
@@ -560,7 +588,8 @@ def draw_bubbles():
         text_color = bubble["color"]
         text_block_start_y_screen, total_text_height = calc_bubble_text_layout(bubble, zoom_level, map_offset_y,
                                                                                line_height_scaled)
-        maxLineWidth = render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen, line_height_scaled)
+        maxLineWidth = render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen,
+                                          line_height_scaled)
         font_scaling(bubble, maxLineWidth)
 
 
