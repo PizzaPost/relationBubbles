@@ -321,8 +321,73 @@ def handle_zoom(event):
         map_offset_y += (world_my_after - world_my_before) * zoom_level
         return True
     return False
+def handle_mouse_button_one_down():
+    global click_start, moved, dragging, offset_x, offset_y, dragging_map, last_mouse_pos
+    click_start = event.pos
+    moved = False
+    clicked_on_bubble = False
+    for bubble in bubbles:
+        distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
+        if distance < bubble["radius"]:
+            dragging = bubble
+            offset_x = bubble["x"] - world_mx
+            offset_y = bubble["y"] - world_my
+            clicked_on_bubble = True
+            break
+    if not clicked_on_bubble:
+        dragging_map = True
+        last_mouse_pos = event.pos
 
+def handle_mouse_button_three_down():
+    global world_mx, world_my
+    on_rect = False
+    for bubble in bubbles:
+        distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
+        if distance < bubble["radius"]:
+            tk_queue.put(("ce", bubble))
+            on_rect = True
+            break
+    if not on_rect:
+        tk_queue.put("cc")
+def handle_mouse_button_one_up():
+    global connecting_bubble
+    mx, my = event.pos
+    world_mx = (mx - map_offset_x) / zoom_level
+    world_my = (my - map_offset_y) / zoom_level
+    clicked_bubble = None
+    for bubble in bubbles:
+        distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
+        if distance < bubble["radius"]:
+            clicked_bubble = bubble
+            break
+    if connecting_bubble is None:
+        if clicked_bubble:
+            connecting_bubble = clicked_bubble
+    else:
+        if clicked_bubble and clicked_bubble is not connecting_bubble:
+            if clicked_bubble not in connecting_bubble["connections"]:
+                connecting_bubble["connections"].append(clicked_bubble)
+        connecting_bubble = None
 
+def handle_mouse_motion():
+    global batter_saving_cooldown, dragging, map_offset_x, map_offset_y, dragging_map, last_mouse_pos, click_start, moved
+    batter_saving_cooldown = 0
+    mx, my = event.pos
+    if dragging:
+        world_mx = (mx - map_offset_x) / zoom_level
+        world_my = (my - map_offset_y) / zoom_level
+        dragging["x"] = world_mx + offset_x
+        dragging["y"] = world_my + offset_y
+    elif dragging_map:
+        last_mx, last_my = last_mouse_pos
+        dx = mx - last_mx
+        dy = my - last_my
+        map_offset_x += dx
+        map_offset_y += dy
+        last_mouse_pos = event.pos
+    if click_start:
+        if math.hypot(event.pos[0] - click_start[0], event.pos[1] - click_start[1]) > 5:
+            moved = True
 pg = pygame.display.set_mode((screen_width // 1.5, screen_height // 1.5 * 1.2), pygame.RESIZABLE)
 pygame.display.set_caption("Bubble Net")
 bubbles = []
@@ -388,76 +453,23 @@ while running:
                 elif mods and pygame.KMOD_CTRL and event.key == pygame.K_o:
                     bubbles = list(input("Send your code here: "))
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                batter_saving_cooldown=0
+                batter_saving_cooldown = 0
                 mx, my = event.pos
                 world_mx = (mx - map_offset_x) / zoom_level
                 world_my = (my - map_offset_y) / zoom_level
                 if event.button == 1:
-                    click_start = event.pos
-                    moved = False
-                    clicked_on_bubble = False
-                    for bubble in bubbles:
-                        distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
-                        if distance < bubble["radius"]:
-                            dragging = bubble
-                            offset_x = bubble["x"] - world_mx
-                            offset_y = bubble["y"] - world_my
-                            clicked_on_bubble = True
-                            break
-                    if not clicked_on_bubble:
-                        dragging_map = True
-                        last_mouse_pos = event.pos
+                    handle_mouse_button_one_down()
                 elif event.button == 3:
-                    on_rect = False
-                    for bubble in bubbles:
-                        distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
-                        if distance < bubble["radius"]:
-                            tk_queue.put(("ce", bubble))
-                            on_rect = True
-                            break
-                    if not on_rect:
-                        tk_queue.put("cc")
+                    handle_mouse_button_three_down()
             elif event.type == pygame.MOUSEBUTTONUP:
                 batter_saving_cooldown=0
                 dragging = None
                 click_start = None
                 dragging_map = False
                 if event.button == 1 and not moved:
-                    mx, my = event.pos
-                    world_mx = (mx - map_offset_x) / zoom_level
-                    world_my = (my - map_offset_y) / zoom_level
-                    clicked_bubble = None
-                    for bubble in bubbles:
-                        distance = math.sqrt((bubble["x"] - world_mx) ** 2 + (bubble["y"] - world_my) ** 2)
-                        if distance < bubble["radius"]:
-                            clicked_bubble = bubble
-                            break
-                    if connecting_bubble is None:
-                        if clicked_bubble:
-                            connecting_bubble = clicked_bubble
-                    else:
-                        if clicked_bubble and clicked_bubble is not connecting_bubble:
-                            if clicked_bubble not in connecting_bubble["connections"]:
-                                connecting_bubble["connections"].append(clicked_bubble)
-                        connecting_bubble = None
+                    handle_mouse_button_one_up()
             elif event.type == pygame.MOUSEMOTION:
-                batter_saving_cooldown=0
-                mx, my = event.pos
-                if dragging:
-                    world_mx = (mx - map_offset_x) / zoom_level
-                    world_my = (my - map_offset_y) / zoom_level
-                    dragging["x"] = world_mx + offset_x
-                    dragging["y"] = world_my + offset_y
-                elif dragging_map:
-                    last_mx, last_my = last_mouse_pos
-                    dx = mx - last_mx
-                    dy = my - last_my
-                    map_offset_x += dx
-                    map_offset_y += dy
-                    last_mouse_pos = event.pos
-                if click_start:
-                    if math.hypot(event.pos[0] - click_start[0], event.pos[1] - click_start[1]) > 5:
-                        moved = True
+                handle_mouse_motion()
             elif event.type == pygame.MOUSEWHEEL:
                 batter_saving_cooldown=0
                 handle_zoom(event)
