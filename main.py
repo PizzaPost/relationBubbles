@@ -7,6 +7,7 @@ try:
     import tkinter
     import sys
     import urllib.request
+    import typing
 except ImportError as e:
     print(f"Error: '{e.name}' not found. Please install it using 'pip install {e.name}'.")
     exit()
@@ -27,8 +28,7 @@ while trying:
         import nav_bar
         trying=False
     except ImportError as e:
-        if not e.name=="tkinter":
-            tkinter.messagebox.showinfo("Missing Module", f"Downloading '{e.name}'")
+        tkinter.messagebox.showinfo("Missing Module", f"Downloading '{e.name}'")
         if not e.name in custom_modules:
             os.system(f"pip install {e.name}")
         else:
@@ -40,16 +40,11 @@ for file in necessarry_files:
         link=f"https://raw.githubusercontent.com/PizzaPost/relationBubbles/master/{file}"
         urllib.request.urlretrieve(link, file)
 
-try:
-    bubble_img_original = pygame.image.load("bubble.png")
-    batter_saving_icon = pygame.image.load("batter_saving_icon.png")
-    half_batter_saving_icon_width = batter_saving_icon.get_width() // 2
-    half_batter_saving_icon_height = batter_saving_icon.get_height() // 2
-    bubble_icon = pygame.image.load("bubble_icon.png")
-except pygame.error:
-    print("Warning: 'bubble.png' not found. Using a fallback shape.")
-    bubble_img_original = pygame.Surface((100, 100), pygame.SRCALPHA)
-    pygame.draw.rect(bubble_img_original, (255, 255, 255), (0, 0, 100, 100), border_radius=35)
+bubble_img_original = pygame.image.load("bubble.png")
+batter_saving_icon = pygame.image.load("batter_saving_icon.png")
+half_batter_saving_icon_width = batter_saving_icon.get_width() // 2
+half_batter_saving_icon_height = batter_saving_icon.get_height() // 2
+bubble_icon = pygame.image.load("bubble_icon.png")
 
 pygame.init()
 running = True
@@ -519,12 +514,12 @@ def render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start
     return maxLineWidth
 
 
-def font_scaling(bubble, maxLineWidth):
+def font_scaling(bubble, maxLineWidth, totalLineHeight):
     maxDiameter = bubble["radius"] * math.sqrt(2) * zoom_level
     minDiameter = bubble["radius"] * zoom_level
-    if max(maxLineWidth, line_height * len(bubble["rendered_lines"])) > maxDiameter:
+    if max(maxLineWidth, totalLineHeight) > maxDiameter:
         bubble["fm"] *= 0.99
-    elif max(maxLineWidth, line_height * len(bubble["rendered_lines"])) < minDiameter:
+    elif max(maxLineWidth, totalLineHeight) < minDiameter:
         bubble["fm"] *= 1.01
 
 
@@ -589,7 +584,7 @@ def draw_bubbles():
         text_block_start_y_screen, total_text_height = calc_bubble_text_layout(bubble, zoom_level, map_offset_y,
                                                                                line_height_scaled)
         maxLineWidth = render_bubble_text(bubble, bubble_width_screen, text_color, text_block_start_y_screen, line_height_scaled)
-        font_scaling(bubble, maxLineWidth)
+        font_scaling(bubble, maxLineWidth, total_text_height)
 
 
 pg = pygame.display.set_mode((screen_width // 1.5, screen_height // 1.5 * 1.2), pygame.RESIZABLE)
